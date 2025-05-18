@@ -7,6 +7,7 @@ import { full as MarkdownItEmoji } from 'https://esm.sh/markdown-it-emoji@3.0.0'
 import { default as MarkdownItFootnote } from 'https://esm.sh/markdown-it-footnote@4.0.0';
 import { default as MarkdownItTaskLists } from 'https://esm.sh/markdown-it-task-lists@2.1.1';
 import { default as MarkdownItTexmath } from 'https://esm.sh/markdown-it-texmath@1.0.0';
+const { randomUUID } = await import('node:crypto');
 import Katex from 'https://esm.sh/katex@0.16.9';
 
 const __args = parseArgs(Deno.args);
@@ -16,18 +17,36 @@ const md = new MarkdownIt('default', {
   typographer: true,
   linkify: true,
   langPrefix: 'language-',
-  highlight: __args['syntax'] && ((code, language) => {
-    if (language && highlight.getLanguage(language)) {
-      try {
-        return highlight.highlight(code, { language }).value;
-      } catch {
-        return code;
+  highlight:
+    __args['syntax'] &&
+    ((code, language) => {
+      if (language === 'mermaid') {
+        return `
+        <div
+          class="peek-mermaid-container"
+        >
+          <div
+            id="graph-mermaid-${randomUUID()}"
+            data-graph="mermaid"
+            data-graph-definition="${md.utils.escapeHtml(code || '')}"
+          >
+            <div class="peek-loader"></div>
+          </div>
+        </div>
+        `;
       }
-    }
+      if (language && highlight.getLanguage(language)) {
+        try {
+          return highlight.highlight(code, { language }).value;
+        } catch {
+          return code;
+        }
+      }
 
-    return '';
-  }),
-}).use(MarkdownItEmoji)
+      return '';
+    }),
+})
+  .use(MarkdownItEmoji)
   .use(MarkdownItFootnote)
   .use(MarkdownItTaskLists, { enabled: false, label: true })
   .use(MarkdownItTexmath, {
@@ -96,38 +115,35 @@ md.renderer.rules.math_block_eqno = (() => {
   };
 })();
 
-md.renderer.rules.fence = (() => {
-  const fence = md.renderer.rules.fence!;
-  const escapeHtml = md.utils.escapeHtml;
-  const regex = new RegExp(
-    /^(?<frontmatter>---[\s\S]+---)?\s*(?<content>(?<charttype>flowchart|sequenceDiagram|gantt|classDiagram|stateDiagram|pie|journey|C4Context|erDiagram|requirementDiagram|gitGraph)[\s\S]+)/,
-  );
-
-  return (tokens, idx, options, env, self) => {
-    const token = tokens[idx];
-    const content = token.content.trim();
-
-    if (regex.test(content)) {
-      const match = regex.exec(content);
-      return `
-        <div
-          class="peek-mermaid-container"
-          data-line-begin="${token.attrGet('data-line-begin')}"
-        >
-          <div
-            id="graph-mermaid-${env.genId(hashCode(content))}"
-            data-graph="mermaid"
-            data-graph-definition="${escapeHtml(match?.groups?.content || '')}"
-          >
-            <div class="peek-loader"></div>
-          </div>
-        </div>
-      `;
-    }
-
-    return fence(tokens, idx, options, env, self);
-  };
-})();
+//md.renderer.rules.fence = (() => {
+//  const fence = md.renderer.rules.fence!;
+//  const escapeHtml = md.utils.escapeHtml;
+//  const regex = new RegExp(/^(?<frontmatter>---[\s\S]+---)?\s*(?<content>[\s\S]+)/);
+//  return (tokens, idx, options, env, self) => {
+//    const token = tokens[idx];
+//    const content = token.content.trim();
+//
+//    if (regex.test(content)) {
+//      const match = regex.exec(content);
+//      return `
+//        <div
+//          class="peek-mermaid-container"
+//          data-line-begin="${token.attrGet('data-line-begin')}"
+//        >
+//          <div
+//            id="graph-mermaid-${env.genId(hashCode(content))}"
+//            data-graph="mermaid"
+//            data-graph-definition="${escapeHtml(match?.groups?.content || '')}"
+//          >
+//            <div class="peek-loader"></div>
+//          </div>
+//        </div>
+//      `;
+//    }
+//
+//    return fence(tokens, idx, options, env, self);
+//  };
+//})();
 
 export function render(markdown: string) {
   const tokens = md.parse(markdown, {});
